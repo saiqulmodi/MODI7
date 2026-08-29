@@ -15,6 +15,7 @@ DB_PATH = "modi7_events.db"
 _COLUMNS = [
     "id", "source", "published", "title", "link", "symbols",
     "macro_terms", "positive_terms", "red_flag_terms", "is_red_flag", "first_seen_at",
+    "alerted_at",
 ]
 
 
@@ -32,9 +33,13 @@ def _connect():
             positive_terms TEXT,
             red_flag_terms TEXT,
             is_red_flag INTEGER,
-            first_seen_at REAL
+            first_seen_at REAL,
+            alerted_at REAL
         )
     """)
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(events)")}
+    if "alerted_at" not in existing_cols:
+        conn.execute("ALTER TABLE events ADD COLUMN alerted_at REAL")
     return conn
 
 
@@ -94,3 +99,28 @@ def count_events():
     n = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
     conn.close()
     return n
+
+
+def get_unalerted_events():
+    """Returns stored items never sent to Telegram yet, oldest first (so alert
+    order matches original publish order rather than fetch/insert order)."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT * FROM events WHERE alerted_at IS NULL ORDER BY first_seen_at ASC"
+    ).fetchall()
+    conn.close()
+    return [_row_to_dict(row) for row in rows]
+
+
+def mark_alerted(ids):
+    """Stamps the given event ids as alerted so a later run won't resend them."""
+    if not ids:
+        return
+    conn = _connect()
+    now = time.time()
+    with conn:
+        conn.executemany(
+            "UPDATE events SET alerted_at = ? WHERE id = ?",
+            [(now, str(i)) for i in ids],
+        )
+    conn.close()

@@ -1,3 +1,4 @@
+send_telegram.py
 __pycache__/
 *.log
 modi7_events.db
