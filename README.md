@@ -50,6 +50,7 @@ the two is enough**, but setting both gives you a working fallback.
 On Windows, set a key persistently with:
 
 ```powershell
+setx ANTHROPIC_API_KEY "your-key-here"
 setx GEMINI_API_KEY "your-key-here"
 ```
 
