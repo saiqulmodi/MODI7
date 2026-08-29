@@ -5,4 +5,5 @@ beautifulsoup4
 feedparser
 requests
 anthropic
+google-genai
 pydantic

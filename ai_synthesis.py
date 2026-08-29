@@ -1,30 +1,37 @@
 """
-Phase 3: AI synthesis layer. Runs a single Claude call over a company's
+Phase 3: AI synthesis layer. Runs a single LLM call over a company's
 Phase 1 fundamentals + Phase 2 news/red-flags and returns a structured,
 explicitly-labeled-as-inferred view: overall sentiment, plain-language
 explanations of any red flags, and a running watch-list of what to track.
 
-This is a single classification/summarization call, not an agent -- Claude
-only reasons over the structured data handed to it below (no web access,
-no tools), and every prompt tells it to phrase interpretation as inference,
-not fact, since promoter intent / litigation outcomes / fund flows can't be
-verified from a keyword-matched news feed.
+This is a single classification/summarization call, not an agent -- the
+model only reasons over the structured data handed to it below (no web
+access, no tools), and every prompt tells it to phrase interpretation as
+inference, not fact, since promoter intent / litigation outcomes / fund
+flows can't be verified from a keyword-matched news feed.
 
-Requires an Anthropic API credential (ANTHROPIC_API_KEY env var, or another
-SDK-recognized credential source) -- this module does not embed or collect
-a key itself; get_ai_view() reports a clear error if none is configured.
+Tries Claude (Anthropic) first. If that call fails for any reason -- no
+credential configured, billing/credit issue, rate limit, etc. -- it falls
+back to Gemini (Google) automatically, so the AI View still works with
+just one of the two providers configured. Requires ANTHROPIC_API_KEY
+and/or GEMINI_API_KEY (or GOOGLE_API_KEY) in the environment; neither key
+is embedded here. If both providers fail, get_ai_view() returns both
+error messages.
 """
 
 import time
 from typing import List
 
 import anthropic
+from google import genai
+from google.genai import types as genai_types
 from pydantic import BaseModel
 
 from fundamentals import get_fundamentals, get_analyst_view
 import events_store
 
-MODEL = "claude-opus-5"
+CLAUDE_MODEL = "claude-opus-5"
+GEMINI_MODEL = "gemini-3.6-flash"
 _CACHE_TTL_SECONDS = 3600
 _cache = {}
 
@@ -91,11 +98,60 @@ def _format_news(events):
     return "\n".join(lines)
 
 
+def _call_claude(prompt):
+    """Returns (AIView, None) on success, or (None, error_message) on failure."""
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.parse(
+            model=CLAUDE_MODEL,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+            output_format=AIView,
+        )
+        return response.parsed_output, None
+    except anthropic.AuthenticationError:
+        return None, "No Anthropic API credential configured (ANTHROPIC_API_KEY)."
+    except anthropic.APIStatusError as e:
+        return None, f"Claude request failed: {e.message}"
+    except TypeError as e:
+        if "authentication method" in str(e).lower():
+            return None, "No Anthropic API credential configured (ANTHROPIC_API_KEY)."
+        return None, f"Claude request failed: {e}"
+    except Exception as e:
+        return None, f"Claude request failed: {e}"
+
+
+def _call_gemini(prompt):
+    """Returns (AIView, None) on success, or (None, error_message) on failure."""
+    try:
+        client = genai.Client()  # reads GEMINI_API_KEY or GOOGLE_API_KEY
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=AIView,
+            ),
+        )
+        if response.parsed is None:
+            return None, "Gemini returned a response that didn't match the expected schema."
+        return response.parsed, None
+    except Exception as e:
+        message = str(e)
+        if "API key" in message or "API_KEY" in message:
+            return None, "No Gemini API credential configured (GEMINI_API_KEY or GOOGLE_API_KEY)."
+        return None, f"Gemini request failed: {message}"
+
+
 def get_ai_view(symbol, use_cache=True):
     """
-    Returns {sentiment, summary, red_flags_explained, watch_items, error}.
-    error is set (and other fields absent) if fundamentals couldn't be
-    fetched or no Anthropic credential is configured.
+    Returns {sentiment, summary, red_flags_explained, watch_items, provider, error}.
+    Tries Claude first, falls back to Gemini if Claude fails for any reason
+    (missing credential, billing, rate limit, ...). error is set (and other
+    fields absent) only if BOTH providers fail, or fundamentals couldn't be
+    fetched.
     """
     cache_key = symbol.strip().upper()
     cached = _cache.get(cache_key)
@@ -123,32 +179,20 @@ def get_ai_view(symbol, use_cache=True):
         "red_flags_explained rather than inventing one."
     )
 
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.parse(
-            model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-            output_format=AIView,
-        )
-    except anthropic.AuthenticationError:
-        return {"error": "No Anthropic API credential configured -- set the ANTHROPIC_API_KEY environment variable to enable the AI view."}
-    except anthropic.APIStatusError as e:
-        return {"error": f"AI request failed: {e.message}"}
-    except TypeError as e:
-        if "authentication method" in str(e).lower():
-            return {"error": "No Anthropic API credential configured -- set the ANTHROPIC_API_KEY environment variable to enable the AI view."}
-        return {"error": f"AI request failed: {e}"}
-    except Exception as e:
-        return {"error": f"AI request failed: {e}"}
+    view, claude_error = _call_claude(prompt)
+    provider = "Claude"
+    if view is None:
+        view, gemini_error = _call_gemini(prompt)
+        provider = "Gemini"
+        if view is None:
+            return {"error": f"Claude failed ({claude_error}); Gemini fallback also failed ({gemini_error})."}
 
-    view = response.parsed_output
     result = {
         "sentiment": view.sentiment,
         "summary": view.summary,
         "red_flags_explained": [{"flag": r.flag, "explanation": r.explanation} for r in view.red_flags_explained],
         "watch_items": view.watch_items,
+        "provider": provider,
         "error": None,
     }
     _cache[cache_key] = (result, time.time())
