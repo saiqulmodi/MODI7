@@ -1,0 +1,8 @@
+streamlit
+pandas
+yfinance
+beautifulsoup4
+feedparser
+requests
+anthropic
+pydantic

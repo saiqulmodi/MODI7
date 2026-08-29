@@ -1,0 +1,4 @@
+__pycache__/
+*.log
+modi7_events.db
+universe_scan_full.csv
