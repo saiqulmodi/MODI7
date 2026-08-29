@@ -35,9 +35,9 @@ MACRO_KEYWORDS = [
     "fiscal deficit", "credit policy", "FII", "DII", "current account deficit",
     "rating downgrade", "rating upgrade", "moody's", "s&p", "fitch",
     "federal reserve", "fed rate", "rate hike", "rate cut", "tariff",
-    "sanctions", "trade war", "oil price", "crude oil", "opec", "recession",
+    "sanctions", "trade war", "recession",
     "geopolitical", "china", "war", "ceasefire", "central bank",
-    "gold price", "silver price", "natural gas", "copper", "commodity prices",
+    "silver price", "natural gas", "copper", "commodity prices",
 ]
 
 # Corporate-announcement categories worth alerting on for ANY company, not
