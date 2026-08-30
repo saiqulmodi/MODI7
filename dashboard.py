@@ -36,6 +36,26 @@ def _fundamentals_row(r):
     }
 
 
+def _peer_comparison_row(r):
+    """_fundamentals_row plus screener.in shareholding/pros-cons. Kept separate
+    from _fundamentals_row since that's reused by the bulk universe scan
+    (tab_universe), which must stay yfinance-only -- peer lists here are a
+    handful of symbols, not several hundred, so the extra screener.in calls
+    (cached, throttled) are fine."""
+    row = _fundamentals_row(r)
+    if row.get("Error"):
+        return row
+    screener = get_screener_view(r["symbol"])
+    if not screener.get("error"):
+        row["Promoter %"] = screener.get("promoter_holding_pct")
+        row["FII %"] = screener.get("fii_holding_pct")
+        row["DII %"] = screener.get("dii_holding_pct")
+        row["Public %"] = screener.get("public_holding_pct")
+        row["Screener Pros"] = "; ".join(screener.get("pros", [])) or None
+        row["Screener Cons"] = "; ".join(screener.get("cons", [])) or None
+    return row
+
+
 tab_single, tab_universe, tab_events = st.tabs(
     ["Single Stock / Peers", "MODI1 Intraday Universe", "News & Red Flags"]
 )
@@ -206,8 +226,14 @@ with tab_single:
 
         if len(results) > 1:
             st.subheader("Peer comparison")
+            st.caption(
+                "Promoter/FII/DII/Public % and Pros/Cons are from screener.in (latest quarter's "
+                "shareholding; pros/cons are screener's machine-generated summary, not verified fact)."
+            )
+            with st.spinner("Fetching screener.in shareholding for peers..."):
+                peer_df = pd.DataFrame([_peer_comparison_row(r) for r in results])
             st.dataframe(
-                pd.DataFrame([_fundamentals_row(r) for r in results]).drop(columns=["Error"]),
+                peer_df.drop(columns=["Error"]),
                 hide_index=True, use_container_width=True,
             )
 
