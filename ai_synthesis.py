@@ -28,6 +28,8 @@ from google.genai import types as genai_types
 from pydantic import BaseModel
 
 from fundamentals import get_fundamentals, get_analyst_view
+from screener_scraper import get_screener_view
+from tickertape_mf import get_mf_holding
 import events_store
 
 CLAUDE_MODEL = "claude-opus-5"
@@ -87,6 +89,29 @@ def _format_analyst(a):
         f"(Strong Buy {counts.get('strongBuy', 0)}, Buy {counts.get('buy', 0)}, "
         f"Hold {counts.get('hold', 0)}, Sell {counts.get('sell', 0)}, Strong Sell {counts.get('strongSell', 0)})"
     )
+
+
+def _format_shareholding(screener, mf):
+    lines = []
+    if not screener.get("error"):
+        lines.append(
+            f"Promoter: {screener.get('promoter_holding_pct')}% "
+            f"(change {screener.get('promoter_holding_change_qoq_pct')}pp QoQ), "
+            f"FII: {screener.get('fii_holding_pct')}% (change {screener.get('fii_holding_change_qoq_pct')}pp QoQ), "
+            f"DII: {screener.get('dii_holding_pct')}% (change {screener.get('dii_holding_change_qoq_pct')}pp QoQ), "
+            f"Public: {screener.get('public_holding_pct')}% (change {screener.get('public_holding_change_qoq_pct')}pp QoQ)"
+        )
+    if not mf.get("error"):
+        lines.append(
+            f"Mutual fund holding (subset of DII, shown separately): {mf.get('mf_holding_pct')}% "
+            f"(change {mf.get('mf_holding_change_qoq_pct')}pp QoQ)"
+        )
+        for f in mf.get("funds", [])[:5]:
+            lines.append(
+                f"  - {f['name']}: holds {f['market_cap_pct']}% of company, "
+                f"3-month change {f['change_3m_pct']}pp, rank {f['current_rank']} (was {f['prev_rank']})"
+            )
+    return "\n".join(lines) if lines else "No real shareholding-pattern data available."
 
 
 def _format_news(events):
@@ -164,12 +189,15 @@ def get_ai_view(symbol, use_cache=True):
         return {"error": fundamentals["error"]}
 
     analyst = get_analyst_view(symbol)
+    screener = get_screener_view(symbol)
+    mf = get_mf_holding(symbol)
     bare_symbol = fundamentals["symbol"].split(".")[0]
     news_events = events_store.query_events(symbol=bare_symbol, limit=20)
 
     prompt = (
         f"{_format_fundamentals(fundamentals)}\n\n"
         f"Analyst view:\n{_format_analyst(analyst)}\n\n"
+        f"Shareholding pattern (real, from exchange filings):\n{_format_shareholding(screener, mf)}\n\n"
         f"Recent news/filings (from NSE/SEBI/RSS, keyword-matched -- may be incomplete):\n"
         f"{_format_news(news_events)}\n\n"
         "Based only on the above: give an overall sentiment, a short summary "
@@ -195,7 +223,12 @@ def get_ai_view(symbol, use_cache=True):
         "general reputation of this company's management. If none of the "
         "news items above touch on management/governance, return an empty "
         "list for management_signals rather than commenting on management "
-        "quality from general knowledge."
+        "quality from general knowledge. If the shareholding data shows a "
+        "notable mutual fund or promoter holding change (a fund entering, "
+        "exiting, or meaningfully changing rank; a promoter holding drop), "
+        "mention a plausible reason in the summary or watch_items -- phrased "
+        "as inference ('this may suggest...'), since actual fund/promoter "
+        "intent isn't observable from holding percentages alone."
     )
 
     view, claude_error = _call_claude(prompt)
