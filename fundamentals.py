@@ -29,7 +29,7 @@ def _is_retryable(exc):
     return any(marker in str(exc) for marker in _RETRYABLE_MARKERS)
 
 
-def _with_retry(fn, retries=3, base_delay=2.0):
+def _with_retry(fn, retries=4, base_delay=3.0):
     last_exc = None
     for attempt in range(retries + 1):
         try:
@@ -91,8 +91,9 @@ def get_fundamentals(symbol):
 
     # Jitter spreads out bursts when called from get_bulk_fundamentals's thread
     # pool -- several threads hitting Yahoo in the same instant is what tends
-    # to trigger the rate limit in the first place.
-    time.sleep(random.uniform(0, 0.5))
+    # to trigger the rate limit in the first place. A full ~530-symbol scan
+    # is worth taking slower over -- reliability over speed here.
+    time.sleep(random.uniform(0.3, 0.8))
 
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -114,18 +115,24 @@ def get_fundamentals(symbol):
     roe = info.get("returnOnEquity")
     net_margin = info.get("profitMargins")
 
+    # Small gaps between this symbol's own sequential calls -- a single
+    # thread firing 5 Yahoo requests back-to-back with no spacing was still
+    # bursty enough to trip the rate limit even with a modest thread pool.
     try:
         fin_latest, fin_prev = _latest_two(_with_retry(lambda: ticker.financials))
     except Exception:
         fin_latest, fin_prev = None, None
+    time.sleep(random.uniform(0.3, 0.6))
     try:
         bs_latest, bs_prev = _latest_two(_with_retry(lambda: ticker.balance_sheet))
     except Exception:
         bs_latest, bs_prev = None, None
+    time.sleep(random.uniform(0.3, 0.6))
     try:
         q_fin_latest, q_fin_prev = _latest_two(_with_retry(lambda: ticker.quarterly_financials))
     except Exception:
         q_fin_latest, q_fin_prev = None, None
+    time.sleep(random.uniform(0.3, 0.6))
 
     net_income = _row(fin_latest, "Net Income", "Net Income Common Stockholders")
     revenue = _row(fin_latest, "Total Revenue")
@@ -289,14 +296,17 @@ def get_peer_comparison(symbol, peer_symbols):
     return [get_fundamentals(s) for s in symbols]
 
 
-def get_bulk_fundamentals(symbols, max_workers=4, progress_callback=None):
+def get_bulk_fundamentals(symbols, max_workers=3, progress_callback=None):
     """
     Fetches fundamentals for many symbols concurrently (Yahoo's per-ticker
     .info call is the bottleneck -- sequential fetching of a several-hundred
     symbol universe would take minutes longer than necessary). max_workers is
-    kept modest (4) since each symbol makes 5+ separate Yahoo calls -- higher
-    concurrency was triggering Yahoo's rate limit (429s and, once throttled,
-    401 "Invalid Crumb" errors) across a several-hundred symbol universe scan.
+    kept low (3) since each symbol makes 5+ separate Yahoo calls -- 8 (and
+    even 4) still triggered Yahoo's rate limit (429s and, once throttled,
+    401 "Invalid Crumb" errors, which then affected every remaining symbol
+    for the rest of that run) across the full ~530-symbol universe scan.
+    Reliability matters more than speed here -- a full scan taking several
+    extra minutes is a fine trade for it actually completing.
 
     progress_callback, if given, is called as (completed_count, total_count)
     after each symbol finishes, so a caller (e.g. a Streamlit progress bar)

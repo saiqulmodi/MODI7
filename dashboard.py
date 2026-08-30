@@ -347,8 +347,10 @@ with tab_universe:
         f"(from `intraday_watchlist.py`'s INTRADAY_SYMBOLS)."
     )
     st.caption(
-        "A full scan hits Yahoo Finance once per symbol (fetched concurrently). "
-        "Expect it to take a few minutes, and expect some smaller/less-covered names to come back with no data."
+        "A full scan hits Yahoo Finance 5+ times per symbol (fetched concurrently, but deliberately "
+        "throttled to avoid rate-limiting). Expect a full ~530-symbol scan to take 15-20+ minutes -- "
+        "reliability over speed, since going faster is what triggers Yahoo blocking the whole scan. "
+        "Some smaller/less-covered names will still come back with no data regardless."
     )
 
     scan_count = st.number_input(
@@ -365,7 +367,7 @@ with tab_universe:
             progress_bar.progress(completed / total)
             status_text.text(f"{completed}/{total} symbols fetched...")
 
-        results = get_bulk_fundamentals(symbols_to_scan, max_workers=8, progress_callback=_on_progress)
+        results = get_bulk_fundamentals(symbols_to_scan, progress_callback=_on_progress)
         status_text.empty()
         progress_bar.empty()
 
