@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from fundamentals import get_fundamentals, get_peer_comparison, get_bulk_fundamentals, get_analyst_view
 from screener_scraper import get_screener_view
+from charts import get_price_history, build_candlestick_figure
+import angel_charts
 from universe import MODI1_INTRADAY_SYMBOLS
 from events import get_matched_events
 import events_store
@@ -84,6 +86,43 @@ with tab_single:
             st.stop()
 
         st.success(f"{primary['name']} ({primary['symbol']}) -- {primary['sector']} / {primary['industry']}")
+
+        st.subheader("Price chart")
+        chart_period_labels = {"1mo": "1M", "3mo": "3M", "6mo": "6M", "1y": "1Y", "5y": "5Y"}
+        chart_tab_labels = list(chart_period_labels.values())
+        if angel_charts.is_configured():
+            chart_tab_labels = ["Today (Live)"] + chart_tab_labels
+        chart_tabs = st.tabs(chart_tab_labels)
+
+        tab_offset = 0
+        if angel_charts.is_configured():
+            with chart_tabs[0]:
+                intraday = angel_charts.get_intraday_candles(primary["symbol"])
+                if intraday.get("error"):
+                    st.caption(f"Live intraday unavailable: {intraday['error']}")
+                elif not intraday["candles"]:
+                    st.caption("No intraday candles yet for today's session.")
+                else:
+                    import pandas as _pd
+                    intraday_df = _pd.DataFrame(
+                        intraday["candles"], columns=["Date", "Open", "High", "Low", "Close", "Volume"]
+                    ).set_index("Date")
+                    st.plotly_chart(
+                        build_candlestick_figure(intraday_df, f"{primary['symbol']} -- Today (5-min, Angel One)"),
+                        use_container_width=True,
+                    )
+            tab_offset = 1
+
+        for i, period in enumerate(chart_period_labels):
+            with chart_tabs[i + tab_offset]:
+                history = get_price_history(primary["symbol"], period=period)
+                if isinstance(history, dict) and history.get("error"):
+                    st.caption(history["error"])
+                else:
+                    st.plotly_chart(
+                        build_candlestick_figure(history, f"{primary['symbol']} -- {chart_period_labels[period]}"),
+                        use_container_width=True,
+                    )
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Price", f"₹{primary['price']:.2f}" if primary["price"] else "N/A")

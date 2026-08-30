@@ -57,6 +57,23 @@ setx GEMINI_API_KEY "your-key-here"
 **Note:** `setx` only affects new processes — restart your terminal and the
 Streamlit dashboard after setting a key for it to take effect.
 
+### Optional: Live intraday charts (Angel One)
+
+The "Today (Live)" chart tab needs a working Angel One SmartAPI login.
+`angel_login.py` is **not** committed to this repo (gitignored, like
+`send_telegram.py`) since it holds live credentials. Copy your working
+version from MODI1's `angel_login.py`, or create one with the same shape:
+`CLIENT_ID`, `PASSWORD`, `API_KEY`, `TOTP_SECRET` at the top, and a
+module-level `auth_token` set after logging in (see MODI1's `angel_login.py`
+for the full login flow).
+
+Also run `python download_angel_scrips.py` once to fetch the NSE instrument
+master (`angel_scrips.json`, ~40 MB, gitignored, public Angel One endpoint,
+no auth needed) that maps symbols to Angel One's instrument tokens.
+
+Without both files present, the dashboard just skips the "Today (Live)" tab
+and shows the yfinance-based daily/weekly/monthly charts only.
+
 ## Running
 
 ```bash

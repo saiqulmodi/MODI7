@@ -1,4 +1,6 @@
 send_telegram.py
+angel_login.py
+angel_scrips.json
 __pycache__/
 *.log
 modi7_events.db
