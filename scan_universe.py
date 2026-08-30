@@ -15,7 +15,7 @@ def _progress(completed, total):
 if __name__ == "__main__":
     start = time.time()
     print(f"Scanning {len(MODI1_INTRADAY_SYMBOLS)} symbols...")
-    results = get_bulk_fundamentals(MODI1_INTRADAY_SYMBOLS, max_workers=8, progress_callback=_progress)
+    results = get_bulk_fundamentals(MODI1_INTRADAY_SYMBOLS, progress_callback=_progress)
     elapsed = time.time() - start
 
     df = pd.DataFrame(results)
