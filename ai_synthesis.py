@@ -46,6 +46,7 @@ class AIView(BaseModel):
     summary: str
     red_flags_explained: List[RedFlagExplanation]
     watch_items: List[str]
+    management_signals: List[str]
 
 
 SYSTEM_PROMPT = (
@@ -184,7 +185,17 @@ def get_ai_view(symbol, use_cache=True):
         "change (dividend policy, capital allocation, related-party-transaction "
         "policy, promoter reclassification, scheme of arrangement/demerger), "
         "call it out explicitly in the summary or watch_items rather than "
-        "letting it pass unmentioned as just another headline."
+        "letting it pass unmentioned as just another headline. Separately, for "
+        "management_signals: look only at promoter/management/governance-"
+        "related items in the news list above (director or auditor "
+        "resignations, share pledges or pledge invocations, related-party "
+        "transactions, promoter stake changes, policy changes, promoter "
+        "reclassification) and give a short list of governance observations "
+        "based strictly on those items -- not on any outside knowledge or "
+        "general reputation of this company's management. If none of the "
+        "news items above touch on management/governance, return an empty "
+        "list for management_signals rather than commenting on management "
+        "quality from general knowledge."
     )
 
     view, claude_error = _call_claude(prompt)
@@ -200,6 +211,7 @@ def get_ai_view(symbol, use_cache=True):
         "summary": view.summary,
         "red_flags_explained": [{"flag": r.flag, "explanation": r.explanation} for r in view.red_flags_explained],
         "watch_items": view.watch_items,
+        "management_signals": view.management_signals,
         "provider": provider,
         "error": None,
     }

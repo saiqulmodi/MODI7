@@ -263,6 +263,10 @@ with tab_single:
                     st.markdown("**Watch items:**")
                     for w in cached_ai_view["watch_items"]:
                         st.markdown(f"- {w}")
+                if cached_ai_view.get("management_signals"):
+                    st.markdown("**Management/governance signals** *(inferred strictly from filings above, not general reputation)*")
+                    for m in cached_ai_view["management_signals"]:
+                        st.markdown(f"- {m}")
 
         if len(results) > 1:
             st.subheader("Peer comparison")
