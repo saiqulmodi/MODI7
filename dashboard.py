@@ -227,6 +227,7 @@ with tab_single:
                 "Published": e["published"],
                 "Title": e["title"],
                 "Red Flags": ", ".join(e["red_flag_terms"]),
+                "Other Matches": ", ".join(e["macro_terms"] + e["positive_terms"]),
                 "Link": e["link"],
             } for e in company_events]
             st.dataframe(

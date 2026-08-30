@@ -176,7 +176,15 @@ def get_ai_view(symbol, use_cache=True):
         "explanation for each red-flagged item (why it might matter, phrased "
         "as inference), and a short list of what to watch next for this stock. "
         "If there are no red flags in the data, return an empty list for "
-        "red_flags_explained rather than inventing one."
+        "red_flags_explained rather than inventing one. If the news includes a "
+        "property/land/business acquisition or disposal, note in the summary "
+        "how the market would plausibly read it (financed by debt vs. cash "
+        "reserves, in-sector expansion vs. unrelated diversification) -- as "
+        "inference, not fact. If the news includes a promoter/company policy "
+        "change (dividend policy, capital allocation, related-party-transaction "
+        "policy, promoter reclassification, scheme of arrangement/demerger), "
+        "call it out explicitly in the summary or watch_items rather than "
+        "letting it pass unmentioned as just another headline."
     )
 
     view, claude_error = _call_claude(prompt)

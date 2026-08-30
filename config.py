@@ -56,6 +56,20 @@ ANNOUNCEMENT_CATEGORY_KEYWORDS = [
     "promoter increases stake", "promoter buys shares", "promoter acquires shares",
     "buyback announcement", "buyback of shares", "bonus issue", "stock split",
     "acquires land", "land acquisition", "acquisition of property",
+    "acquires stake in", "acquisition of business", "strategic investment in",
+    # Analyst meet / concall -- surfaced as links, not full transcript
+    # analysis (that would need PDF text extraction, a bigger separate lift).
+    "investor presentation", "conference call transcript", "concall transcript",
+    "analyst meet", "earnings call", "investor call",
+    # Promoter/company policy changes -- neutral-to-watch, not inherently
+    # positive or negative; kept in this bucket (rather than RED_FLAG_KEYWORDS)
+    # so they don't get mislabeled as a confirmed problem in the dashboard.
+    "change in dividend policy", "revised dividend policy",
+    "capital allocation policy", "revised capital allocation policy",
+    "related party transaction policy", "change in promoter",
+    "reclassification of promoter", "promoter group reclassification",
+    "scheme of arrangement", "demerger", "merger scheme", "slump sale",
+    "hive-off", "strategic review", "change in management",
 ]
 
 # Phase 2: terms that make an item worth flagging as a potential red flag --
@@ -96,6 +110,10 @@ RED_FLAG_KEYWORDS = [
     "institutional investor exits",
     # Governance/dilution red flags.
     "related party transaction", "voluntary delisting", "delisting of shares",
+    # Divestment/disposal -- the selling-side counterpart to the property/
+    # land/business acquisition terms in ANNOUNCEMENT_CATEGORY_KEYWORDS.
+    "sells land", "disposal of property", "divests property", "divests stake in",
+    "sale of business", "sells subsidiary",
 ]
 
 WATCHLIST_SYMBOLS = set(MODI1_INTRADAY_SYMBOLS)
