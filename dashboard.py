@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from fundamentals import get_fundamentals, get_peer_comparison, get_bulk_fundamentals, get_analyst_view
 from screener_scraper import get_screener_view
+from tickertape_mf import get_mf_holding
 from charts import get_price_history, build_candlestick_figure
 import angel_charts
 from universe import MODI1_INTRADAY_SYMBOLS
@@ -187,6 +188,33 @@ with tab_single:
                     st.markdown("Cons")
                     for c in screener.get("cons", []):
                         st.markdown(f"- {c}")
+
+        st.subheader("Mutual fund holding (tickertape.in)")
+        mf = get_mf_holding(primary["symbol"])
+        if mf.get("error"):
+            st.caption(mf["error"])
+        else:
+            st.caption(
+                "Real mutual-fund-specific holding -- distinct from the DII% above, which lumps MFs "
+                "together with insurance/banks/other domestic institutions."
+            )
+            mf1, mf2 = st.columns(2)
+            mf1.metric("Total MF holding", f"{mf['mf_holding_pct']}%" if mf["mf_holding_pct"] is not None else "N/A")
+            mf2.metric(
+                "Change vs. last quarter",
+                f"{mf['mf_holding_change_qoq_pct']:+}pp" if mf["mf_holding_change_qoq_pct"] is not None else "N/A",
+            )
+            if mf.get("funds"):
+                st.markdown("**Top funds holding this stock**")
+                fund_rows = [{
+                    "Fund": f["name"],
+                    "% of Company": f["market_cap_pct"],
+                    "% of Fund's Portfolio": f["weight_pct"],
+                    "3M Change (pp)": f["change_3m_pct"],
+                    "Rank": f["current_rank"],
+                    "Prev Rank": f["prev_rank"],
+                } for f in mf["funds"]]
+                st.dataframe(pd.DataFrame(fund_rows), hide_index=True, use_container_width=True)
 
         st.subheader("Analyst view")
         analyst = get_analyst_view(primary["symbol"])
