@@ -3,6 +3,7 @@ import pandas as pd
 from fundamentals import get_fundamentals, get_peer_comparison, get_bulk_fundamentals, get_analyst_view
 from screener_scraper import get_screener_view
 from tickertape_mf import get_mf_holding
+from policy_exposure import get_policy_exposure
 from charts import get_price_history, build_candlestick_figure
 import angel_charts
 from universe import MODI1_INTRADAY_SYMBOLS
@@ -262,6 +263,34 @@ with tab_single:
                 pd.DataFrame(event_rows), hide_index=True, use_container_width=True,
                 column_config={"Link": st.column_config.LinkColumn(display_text="Open")},
             )
+
+        st.subheader("Policy/regulatory exposure")
+        exposure = get_policy_exposure(primary["sector"], primary["industry"])
+        if not exposure:
+            st.caption(f"No curated policy mapping for {primary['sector']} / {primary['industry']} yet.")
+        else:
+            st.caption(f"Policy levers relevant to {primary['industry']} companies (curated, not exhaustive):")
+            for lever in exposure["levers"]:
+                st.markdown(f"- {lever}")
+
+            recent_macro_events = events_store.query_events(since_days=30, limit=1000)
+            relevant_events = [
+                e for e in recent_macro_events
+                if any(term.lower() in exposure["keywords"] for term in e["macro_terms"])
+            ]
+            if relevant_events:
+                st.markdown("**Recent policy news matching this company's exposure:**")
+                policy_rows = [{
+                    "Published": e["published"], "Title": e["title"],
+                    "Matched Levers": ", ".join(t for t in e["macro_terms"] if t.lower() in exposure["keywords"]),
+                    "Link": e["link"],
+                } for e in relevant_events]
+                st.dataframe(
+                    pd.DataFrame(policy_rows), hide_index=True, use_container_width=True,
+                    column_config={"Link": st.column_config.LinkColumn(display_text="Open")},
+                )
+            else:
+                st.caption("No matching policy news captured in the last 30 days yet.")
 
         st.subheader("AI view (Phase 3)")
         st.caption(

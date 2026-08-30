@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from fundamentals import get_fundamentals, get_analyst_view
 from screener_scraper import get_screener_view
 from tickertape_mf import get_mf_holding
+from policy_exposure import get_policy_exposure
 import events_store
 
 CLAUDE_MODEL = "claude-opus-5"
@@ -114,6 +115,26 @@ def _format_shareholding(screener, mf):
     return "\n".join(lines) if lines else "No real shareholding-pattern data available."
 
 
+def _format_policy_exposure(sector, industry):
+    exposure = get_policy_exposure(sector, industry)
+    if not exposure:
+        return None, exposure
+
+    levers_text = f"Policy levers relevant to {industry} companies: " + "; ".join(exposure["levers"])
+
+    recent_macro_events = events_store.query_events(since_days=30, limit=1000)
+    relevant = [
+        e for e in recent_macro_events
+        if any(term.lower() in exposure["keywords"] for term in e["macro_terms"])
+    ]
+    if relevant:
+        matched_lines = "\n".join(f"  - [{e['published']}] {e['title']}" for e in relevant[:10])
+        levers_text += f"\nRecent policy news matching this exposure:\n{matched_lines}"
+    else:
+        levers_text += "\nNo matching policy news captured in the last 30 days."
+    return levers_text, exposure
+
+
 def _format_news(events):
     if not events:
         return "No news/filings captured for this company yet."
@@ -191,6 +212,7 @@ def get_ai_view(symbol, use_cache=True):
     analyst = get_analyst_view(symbol)
     screener = get_screener_view(symbol)
     mf = get_mf_holding(symbol)
+    policy_text, _ = _format_policy_exposure(fundamentals["sector"], fundamentals["industry"])
     bare_symbol = fundamentals["symbol"].split(".")[0]
     news_events = events_store.query_events(symbol=bare_symbol, limit=20)
 
@@ -198,7 +220,8 @@ def get_ai_view(symbol, use_cache=True):
         f"{_format_fundamentals(fundamentals)}\n\n"
         f"Analyst view:\n{_format_analyst(analyst)}\n\n"
         f"Shareholding pattern (real, from exchange filings):\n{_format_shareholding(screener, mf)}\n\n"
-        f"Recent news/filings (from NSE/SEBI/RSS, keyword-matched -- may be incomplete):\n"
+        + (f"Policy/regulatory exposure:\n{policy_text}\n\n" if policy_text else "")
+        + f"Recent news/filings (from NSE/SEBI/RSS, keyword-matched -- may be incomplete):\n"
         f"{_format_news(news_events)}\n\n"
         "Based only on the above: give an overall sentiment, a short summary "
         "(3-5 sentences) covering both the fundamentals and any news, an "
@@ -228,7 +251,12 @@ def get_ai_view(symbol, use_cache=True):
         "exiting, or meaningfully changing rank; a promoter holding drop), "
         "mention a plausible reason in the summary or watch_items -- phrased "
         "as inference ('this may suggest...'), since actual fund/promoter "
-        "intent isn't observable from holding percentages alone."
+        "intent isn't observable from holding percentages alone. If policy/"
+        "regulatory exposure data is provided, weigh only the policy news "
+        "actually listed there (not general knowledge about the sector) when "
+        "forming sentiment and watch_items -- if no matching policy news was "
+        "captured, don't invent a policy risk just because the sector has one "
+        "in principle."
     )
 
     view, claude_error = _call_claude(prompt)

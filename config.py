@@ -7,6 +7,7 @@ universe (universe.py) instead of importing across projects.
 
 import pandas as pd
 from universe import MODI1_INTRADAY_SYMBOLS
+from policy_exposure import ALL_POLICY_KEYWORDS
 
 RSS_FEEDS = {
     "Economic Times Markets": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
@@ -38,7 +39,11 @@ MACRO_KEYWORDS = [
     "sanctions", "trade war", "recession",
     "geopolitical", "china", "war", "ceasefire", "central bank",
     "silver price", "natural gas", "copper", "commodity prices",
-]
+] + [kw for kw in ALL_POLICY_KEYWORDS if kw not in {
+    # Sector-specific policy levers from policy_exposure.py -- deduped
+    # against terms already above (repo rate, sebi circular).
+    "repo rate", "sebi circular",
+}]
 
 # Corporate-announcement categories worth alerting on for ANY company, not
 # just the watchlist -- order wins and results updates are broad market
