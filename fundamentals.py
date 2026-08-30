@@ -6,6 +6,7 @@ holdings breakdown for NSE-listed companies via yfinance (free, no broker
 auth needed -- Angel One/Motilal only expose trading data, not fundamentals).
 """
 
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -15,6 +16,31 @@ import yfinance as yf
 # single lookups and universe scans within the same run don't re-hit Yahoo.
 _CACHE_TTL_SECONDS = 900
 _cache = {}
+
+# Yahoo throttles bursty/concurrent access with 429 "Too Many Requests" and,
+# once throttled, often also starts returning 401 "Invalid Crumb" until the
+# session's crumb token is refreshed -- retrying with backoff clears both in
+# practice. Don't retry other errors (e.g. 404 for a delisted/renamed ticker)
+# since those won't resolve on their own.
+_RETRYABLE_MARKERS = ("Too Many Requests", "Rate limited", "Invalid Crumb", "429", "401")
+
+
+def _is_retryable(exc):
+    return any(marker in str(exc) for marker in _RETRYABLE_MARKERS)
+
+
+def _with_retry(fn, retries=3, base_delay=2.0):
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            last_exc = e
+            if attempt < retries and _is_retryable(e):
+                time.sleep(base_delay * (2 ** attempt) + random.uniform(0, 1))
+                continue
+            raise
+    raise last_exc
 
 
 def _normalize_symbol(symbol):
@@ -63,9 +89,14 @@ def get_fundamentals(symbol):
     if cached and (time.time() - cached[1]) < _CACHE_TTL_SECONDS:
         return cached[0]
 
+    # Jitter spreads out bursts when called from get_bulk_fundamentals's thread
+    # pool -- several threads hitting Yahoo in the same instant is what tends
+    # to trigger the rate limit in the first place.
+    time.sleep(random.uniform(0, 0.5))
+
     try:
         ticker = yf.Ticker(ticker_symbol)
-        info = ticker.info
+        info = _with_retry(lambda: ticker.info)
     except Exception as e:
         return {"symbol": ticker_symbol, "error": f"Couldn't fetch data: {e}"}
 
@@ -84,15 +115,15 @@ def get_fundamentals(symbol):
     net_margin = info.get("profitMargins")
 
     try:
-        fin_latest, fin_prev = _latest_two(ticker.financials)
+        fin_latest, fin_prev = _latest_two(_with_retry(lambda: ticker.financials))
     except Exception:
         fin_latest, fin_prev = None, None
     try:
-        bs_latest, bs_prev = _latest_two(ticker.balance_sheet)
+        bs_latest, bs_prev = _latest_two(_with_retry(lambda: ticker.balance_sheet))
     except Exception:
         bs_latest, bs_prev = None, None
     try:
-        q_fin_latest, q_fin_prev = _latest_two(ticker.quarterly_financials)
+        q_fin_latest, q_fin_prev = _latest_two(_with_retry(lambda: ticker.quarterly_financials))
     except Exception:
         q_fin_latest, q_fin_prev = None, None
 
@@ -129,7 +160,7 @@ def get_fundamentals(symbol):
     # categories -- treat as an approximate signal, not a substitute for the
     # exchange shareholding-pattern filing.
     try:
-        holders = ticker.major_holders
+        holders = _with_retry(lambda: ticker.major_holders)
         insider_pct = _safe_pct(holders.loc["insidersPercentHeld", "Value"]) if holders is not None and "insidersPercentHeld" in holders.index else None
         institution_pct = _safe_pct(holders.loc["institutionsPercentHeld", "Value"]) if holders is not None and "institutionsPercentHeld" in holders.index else None
     except Exception:
@@ -187,9 +218,11 @@ def get_analyst_view(symbol):
     if cached and (time.time() - cached[1]) < _CACHE_TTL_SECONDS:
         return cached[0]
 
+    time.sleep(random.uniform(0, 0.5))
+
     try:
         ticker = yf.Ticker(ticker_symbol)
-        targets = ticker.analyst_price_targets
+        targets = _with_retry(lambda: ticker.analyst_price_targets)
     except Exception as e:
         result = {"symbol": ticker_symbol, "error": f"Couldn't fetch analyst data: {e}"}
         _analyst_cache[ticker_symbol] = (result, time.time())
@@ -209,7 +242,7 @@ def get_analyst_view(symbol):
     recommendation_counts = None
     recommendation_label = None
     try:
-        recs = ticker.recommendations
+        recs = _with_retry(lambda: ticker.recommendations)
         if recs is not None and not recs.empty:
             latest = recs.iloc[0]
             recommendation_counts = {
@@ -256,11 +289,14 @@ def get_peer_comparison(symbol, peer_symbols):
     return [get_fundamentals(s) for s in symbols]
 
 
-def get_bulk_fundamentals(symbols, max_workers=8, progress_callback=None):
+def get_bulk_fundamentals(symbols, max_workers=4, progress_callback=None):
     """
     Fetches fundamentals for many symbols concurrently (Yahoo's per-ticker
     .info call is the bottleneck -- sequential fetching of a several-hundred
-    symbol universe would take minutes longer than necessary).
+    symbol universe would take minutes longer than necessary). max_workers is
+    kept modest (4) since each symbol makes 5+ separate Yahoo calls -- higher
+    concurrency was triggering Yahoo's rate limit (429s and, once throttled,
+    401 "Invalid Crumb" errors) across a several-hundred symbol universe scan.
 
     progress_callback, if given, is called as (completed_count, total_count)
     after each symbol finishes, so a caller (e.g. a Streamlit progress bar)
