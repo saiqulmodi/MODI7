@@ -43,6 +43,24 @@ def _with_retry(fn, retries=4, base_delay=3.0):
     raise last_exc
 
 
+def _fetch_valid_info(ticker, retries=3, base_delay=2.0):
+    """Under soft load Yahoo sometimes returns a 200 with an empty/stripped
+    .info dict instead of raising -- confirmed by re-fetching several
+    "no data found" symbols from a full-scan run in isolation and getting
+    full data back immediately. _with_retry alone can't catch this since no
+    exception is raised, so retry on "info has no price field" too, not
+    just hard errors."""
+    last_info = None
+    for attempt in range(retries + 1):
+        info = _with_retry(lambda: ticker.info)
+        if info and (info.get("regularMarketPrice") is not None or info.get("currentPrice") is not None):
+            return info
+        last_info = info
+        if attempt < retries:
+            time.sleep(base_delay * (2 ** attempt) + random.uniform(0, 1))
+    return last_info
+
+
 def _normalize_symbol(symbol):
     """NSE tickers need a '.NS' suffix for yfinance (BSE would be '.BO')."""
     symbol = symbol.strip().upper()
@@ -97,7 +115,7 @@ def get_fundamentals(symbol):
 
     try:
         ticker = yf.Ticker(ticker_symbol)
-        info = _with_retry(lambda: ticker.info)
+        info = _fetch_valid_info(ticker)
     except Exception as e:
         return {"symbol": ticker_symbol, "error": f"Couldn't fetch data: {e}"}
 
