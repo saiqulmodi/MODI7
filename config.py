@@ -38,12 +38,45 @@ MACRO_KEYWORDS = [
     "federal reserve", "fed rate", "rate hike", "rate cut", "tariff",
     "sanctions", "trade war", "recession",
     "geopolitical", "china", "war", "ceasefire", "central bank",
-    "silver price", "natural gas", "copper", "commodity prices",
 ] + [kw for kw in ALL_POLICY_KEYWORDS if kw not in {
     # Sector-specific policy levers from policy_exposure.py -- deduped
     # against terms already above (repo rate, sebi circular).
     "repo rate", "sebi circular",
 }]
+
+# Silver + base metals: only worth alerting on when it's a GLOBAL price move
+# (COMEX/LME-driven), not a local Indian event mentioning the same metal
+# (an MCX circular, a domestic import-duty change, a local jeweller-demand
+# story) -- those aren't the kind of move this is meant to catch. Gated by
+# source in _classified_items() below rather than dropped from matching
+# entirely, since the same keyword is meaningful from a global feed and
+# noise from a local one.
+COMMODITY_METAL_KEYWORDS = [
+    "silver price", "silver prices", "copper", "base metal", "base metals",
+    "zinc", "aluminium", "aluminum", "nickel", "lead price",
+]
+
+# Oil, gold, and currency: alerted on at most once per calendar day
+# (shares one quota with COMMODITY_METAL_KEYWORDS above -- see
+# events_store.daily_commodity_quota_used_today()) regardless of source --
+# these move slowly enough day to day that every matching headline doesn't
+# need its own alert, unlike a red-flag or company-specific item.
+DAILY_THROTTLE_KEYWORDS = [
+    "crude oil", "oil price", "oil prices", "brent", "wti", "natural gas",
+    "gold price", "gold prices", "gold rate",
+    "usdinr", "rupee", "dollar index", "currency",
+]
+
+# RSS source names (matching the RSS_FEEDS keys above) treated as global
+# coverage for the COMMODITY_METAL_KEYWORDS gate. NSE announcements and SEBI
+# releases are always local (handled by their own source name, not this
+# feed dict) and never count as global for that gate.
+GLOBAL_SOURCES = {
+    "CNBC World Markets", "CNBC Top News", "Bloomberg Markets",
+    "Investing.com Commodities",
+    "Google News (global markets/Fed/geopolitical)",
+    "Google News (commodities)",
+}
 
 # Corporate-announcement categories worth alerting on for ANY company, not
 # just the watchlist -- order wins and results updates are broad market

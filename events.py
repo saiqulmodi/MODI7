@@ -10,6 +10,7 @@ from fetch_nse_announcements import fetch_nse_announcements
 from fetch_sebi import fetch_sebi_press_releases
 from fetch_rss import fetch_rss_items
 from matcher import classify
+from config import GLOBAL_SOURCES
 import events_store
 
 _CACHE_TTL_SECONDS = 300
@@ -20,7 +21,18 @@ def _classified_items(raw_items):
     rows = []
     for item in raw_items:
         result = classify(item["text"])
-        if not (result["symbols"] or result["macro_terms"] or result["positive_terms"] or result["red_flag_terms"]):
+
+        # Silver/base-metal terms only count as a match from a global
+        # source (see config.GLOBAL_SOURCES) -- the same keyword from a
+        # local Indian source (NSE, SEBI, Economic Times, Business
+        # Standard) is dropped rather than surfaced, since it's a local
+        # event mentioning the metal, not a global price move.
+        commodity_metal_terms = result["commodity_metal_terms"] if item["source"] in GLOBAL_SOURCES else []
+
+        if not (
+            result["symbols"] or result["macro_terms"] or result["positive_terms"]
+            or result["red_flag_terms"] or commodity_metal_terms or result["daily_throttle_terms"]
+        ):
             continue
         rows.append({
             "id": item["id"],
@@ -32,6 +44,8 @@ def _classified_items(raw_items):
             "macro_terms": result["macro_terms"],
             "positive_terms": result["positive_terms"],
             "red_flag_terms": result["red_flag_terms"],
+            "commodity_metal_terms": commodity_metal_terms,
+            "daily_throttle_terms": result["daily_throttle_terms"],
             "is_red_flag": bool(result["red_flag_terms"]),
         })
     return rows

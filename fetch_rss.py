@@ -18,8 +18,14 @@ def fetch_rss_items():
             title = entry.get("title", "")
             summary = entry.get("summary", "")
             link = entry.get("link", "")
+            # id is source+title, not the link -- Google News RSS links embed
+            # a per-fetch session/redirect token, so the SAME article gets a
+            # DIFFERENT link (and therefore a different id, defeating dedup)
+            # on every refetch. The title is stable across refetches; source
+            # is prefixed so an identical headline from two different feeds
+            # doesn't collide into a single dropped row.
             items.append({
-                "id": link or title,
+                "id": f"{source_name}:{title}",
                 "title": title,
                 "text": f"{title} {summary}",
                 "link": link,

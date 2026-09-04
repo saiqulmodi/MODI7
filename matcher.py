@@ -8,6 +8,7 @@ import re
 from config import (
     WATCHLIST_SYMBOLS, SYMBOL_TO_NAME, MACRO_KEYWORDS,
     ANNOUNCEMENT_CATEGORY_KEYWORDS, RED_FLAG_KEYWORDS,
+    COMMODITY_METAL_KEYWORDS, DAILY_THROTTLE_KEYWORDS,
 )
 
 
@@ -33,14 +34,19 @@ def find_matched_symbols(text):
 
 def classify(text):
     """
-    Returns a dict: {symbols, macro_terms, positive_terms, red_flag_terms}.
-    An item is "worth surfacing" if any of the four lists is non-empty.
+    Returns a dict: {symbols, macro_terms, positive_terms, red_flag_terms,
+    commodity_metal_terms, daily_throttle_terms}. An item is "worth
+    surfacing" if any of the six lists is non-empty (commodity_metal_terms
+    is further gated by source -- see config.GLOBAL_SOURCES -- before it
+    counts, since the caller knows the source and this function doesn't).
     """
     return {
         "symbols": find_matched_symbols(text),
         "macro_terms": _matched_keywords(text, MACRO_KEYWORDS),
         "positive_terms": _matched_keywords(text, ANNOUNCEMENT_CATEGORY_KEYWORDS),
         "red_flag_terms": _matched_keywords(text, RED_FLAG_KEYWORDS),
+        "commodity_metal_terms": _matched_keywords(text, COMMODITY_METAL_KEYWORDS),
+        "daily_throttle_terms": _matched_keywords(text, DAILY_THROTTLE_KEYWORDS),
     }
 
 
