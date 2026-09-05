@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import streamlit as st
 import pandas as pd
 from fundamentals import get_fundamentals, get_peer_comparison, get_bulk_fundamentals, get_analyst_view
@@ -7,6 +9,11 @@ from policy_exposure import get_policy_exposure
 from charts import get_price_history, build_candlestick_figure
 import angel_charts
 from universe import MODI1_INTRADAY_SYMBOLS
+from trend_category import (
+    get_bulk_trend_categories, CATEGORY_ORDER, CATEGORY_LABELS,
+    EMA_CATEGORY_ORDER, EMA_CATEGORY_LABELS,
+)
+from universe_scan_scheduled import load_snapshot
 from events import get_matched_events
 import events_store
 from ai_synthesis import get_ai_view
@@ -18,6 +25,18 @@ st.caption(
     "Phase 1: valuation ratios, financials, growth, peer comparison. Phase 2: news/filings red flags. "
     "Data via Yahoo Finance + NSE/SEBI/RSS -- cross-check anything decision-critical against the company's own filings."
 )
+
+
+def _normalize_symbol(symbol):
+    """NSE tickers need a '.NS' suffix for yfinance (BSE would be '.BO') --
+    matches fundamentals.py/charts.py/trend_category.py's identical helper.
+    Needed here to key symbol_category_map (built from raw MODI1_INTRADAY_SYMBOLS)
+    the same way the results table's "Symbol" column is (normalized), or the
+    two never match and every stock falls into "Uncategorized"."""
+    symbol = symbol.strip().upper()
+    if "." not in symbol:
+        symbol = f"{symbol}.NS"
+    return symbol
 
 
 def _fundamentals_row(r):
@@ -58,6 +77,61 @@ def _peer_comparison_row(r):
         row["Screener Pros"] = "; ".join(screener.get("pros", [])) or None
         row["Screener Cons"] = "; ".join(screener.get("cons", [])) or None
     return row
+
+
+def _format_ago(iso_ts):
+    if not iso_ts:
+        return "never"
+    delta = datetime.now(timezone.utc) - datetime.fromisoformat(iso_ts)
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 1:
+        return "just now"
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m ago"
+
+
+def _trend_categories_from_snapshot(snapshot):
+    """Reshapes the background job's snapshot into the same
+    {symbol: get_trend_category()-shaped dict} form the live 'Categorize
+    Universe' button produces, so both paths feed the same display code."""
+    result = {}
+    for symbol in MODI1_INTRADAY_SYMBOLS:
+        entry = snapshot["symbols"].get(symbol, {})
+        if "trend" in entry:
+            d = dict(entry["trend"])
+            d["error"] = None
+            result[symbol] = d
+        else:
+            result[symbol] = {
+                "symbol": symbol,
+                "error": entry.get("trend_error", "Not yet categorized by the background job."),
+            }
+    return result
+
+
+def _fundamentals_results_from_snapshot(snapshot):
+    """Same reshaping as _trend_categories_from_snapshot, but for fundamentals
+    -- produces a get_bulk_fundamentals()-shaped list."""
+    results = []
+    for symbol in MODI1_INTRADAY_SYMBOLS:
+        entry = snapshot["symbols"].get(symbol, {})
+        if "fundamentals" in entry:
+            d = dict(entry["fundamentals"])
+            d["error"] = None
+            results.append(d)
+        else:
+            results.append({
+                "symbol": symbol,
+                "error": entry.get("fundamentals_error", "Not yet scanned by the background job."),
+            })
+    return results
+
+
+def _load_snapshot_into_session(snapshot):
+    st.session_state["trend_categories"] = _trend_categories_from_snapshot(snapshot)
+    st.session_state["universe_results"] = _fundamentals_results_from_snapshot(snapshot)
 
 
 tab_single, tab_universe, tab_events = st.tabs(
@@ -347,19 +421,190 @@ with tab_universe:
         f"(from `intraday_watchlist.py`'s INTRADAY_SYMBOLS)."
     )
     st.caption(
-        "A full scan hits Yahoo Finance 5+ times per symbol (fetched concurrently, but deliberately "
-        "throttled to avoid rate-limiting). Expect a full ~530-symbol scan to take 15-20+ minutes -- "
-        "reliability over speed, since going faster is what triggers Yahoo blocking the whole scan. "
-        "Some smaller/less-covered names will still come back with no data regardless."
+        "A full fundamentals scan hits Yahoo Finance 5+ times per symbol (fetched concurrently, but "
+        "deliberately throttled to avoid rate-limiting). Expect a full ~530-symbol scan to take 15-20+ "
+        "minutes -- reliability over speed, since going faster is what triggers Yahoo blocking the whole "
+        "scan. Some smaller/less-covered names will still come back with no data regardless."
     )
+
+    snapshot = load_snapshot()
+    if snapshot["symbols"]:
+        st.info(
+            f"**Background scan available** -- categories last refreshed "
+            f"{_format_ago(snapshot.get('trend_updated_at'))}, fundamentals last refreshed "
+            f"{_format_ago(snapshot.get('fundamentals_updated_at'))}. Runs automatically: "
+            f"`MODI7_TrendScan` every 30 min, `MODI7_FundamentalsScan_*` 3x/day (pre-open, midday, close) "
+            f"via Windows Task Scheduler -- no need to wait through a live scan below unless you want a "
+            f"fresher read right now."
+        )
+        if st.button("Load Latest Background Scan"):
+            _load_snapshot_into_session(snapshot)
+
+        # First time this tab renders in a session, show the background scan
+        # automatically rather than an empty tab -- the whole point of the
+        # scheduled job is that results are ready to view within a click, not
+        # a fresh 15-20 min wait.
+        if "universe_results" not in st.session_state and "trend_categories" not in st.session_state:
+            _load_snapshot_into_session(snapshot)
+
+    st.subheader("Step 1 (optional) -- Categorize by trend")
+    st.caption(
+        "Buckets every symbol by where its price sits vs its 20/50/100/200-day SMA -- only 1 Yahoo call "
+        "per symbol (vs 5+ for the fundamentals scan below), so this pass takes a few minutes for the "
+        "full universe. Use this for an on-demand refresh; the background job above already does this "
+        "automatically every 30 min."
+    )
+
+    if st.button("Categorize Universe"):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        def _on_cat_progress(completed, total):
+            progress_bar.progress(completed / total)
+            status_text.text(f"{completed}/{total} symbols categorized...")
+
+        cat_results = get_bulk_trend_categories(MODI1_INTRADAY_SYMBOLS, progress_callback=_on_cat_progress)
+        status_text.empty()
+        progress_bar.empty()
+
+        st.session_state["trend_categories"] = dict(zip(MODI1_INTRADAY_SYMBOLS, cat_results))
+        st.session_state.pop("universe_results", None)
+
+    category_pool = MODI1_INTRADAY_SYMBOLS
+    symbol_category_map = {}
+    if "trend_categories" in st.session_state:
+        trend_categories = st.session_state["trend_categories"]
+        categorized = {s: r for s, r in trend_categories.items() if not r.get("error")}
+        uncategorized = {s: r for s, r in trend_categories.items() if r.get("error")}
+        symbol_category_map = {_normalize_symbol(s): r["category"] for s, r in categorized.items()}
+
+        counts = {cat: 0 for cat in CATEGORY_ORDER}
+        for r in categorized.values():
+            counts[r["category"]] += 1
+
+        st.success(f"{len(categorized)} of {len(trend_categories)} symbols categorized.")
+        counts_df = pd.DataFrame(
+            [{"Category": c, "Description": CATEGORY_LABELS[c], "Symbols": counts[c]} for c in CATEGORY_ORDER]
+        )
+        st.dataframe(counts_df, hide_index=True, use_container_width=True)
+
+        st.markdown("**Which stocks are in each category:**")
+        for cat in CATEGORY_ORDER:
+            cat_symbols = {s: r for s, r in categorized.items() if r["category"] == cat}
+            if not cat_symbols:
+                continue
+            with st.expander(f"{cat} -- {CATEGORY_LABELS[cat]} ({len(cat_symbols)} symbols)"):
+                cat_rows = [
+                    {
+                        "Symbol": s,
+                        "Last Close": r.get("last_close"),
+                        "SMA20": r.get("sma20"),
+                        "SMA50": r.get("sma50"),
+                        "SMA100": r.get("sma100"),
+                        "SMA200": r.get("sma200"),
+                    }
+                    for s, r in sorted(cat_symbols.items())
+                ]
+                st.dataframe(
+                    pd.DataFrame(cat_rows), hide_index=True, use_container_width=True,
+                    height=min(400, 60 + 35 * len(cat_rows)),
+                )
+
+        st.markdown("---")
+        st.markdown(
+            "**EMA-based categorization** -- same 7-tier logic (Cat-1E strongest uptrend .. Cat-7E "
+            "strongest downtrend, MixedE choppy), but tested against the 20/50/100/200-day *exponential* "
+            "moving average instead of the simple one. EMA weights recent days more heavily, so it "
+            "reacts faster to a new trend -- a stock whose SMA and EMA tiers disagree is often an early "
+            "trend-change candidate, since EMA usually shifts first."
+        )
+        ema_counts = {cat: 0 for cat in EMA_CATEGORY_ORDER}
+        for r in categorized.values():
+            ema_counts[r["ema_category"]] += 1
+
+        ema_counts_df = pd.DataFrame(
+            [{"Category": c, "Description": EMA_CATEGORY_LABELS[c], "Symbols": ema_counts[c]} for c in EMA_CATEGORY_ORDER]
+        )
+        st.dataframe(ema_counts_df, hide_index=True, use_container_width=True)
+
+        st.markdown("**Which stocks are in each EMA category:**")
+        for cat in EMA_CATEGORY_ORDER:
+            cat_symbols = {s: r for s, r in categorized.items() if r["ema_category"] == cat}
+            if not cat_symbols:
+                continue
+            with st.expander(f"{cat} -- {EMA_CATEGORY_LABELS[cat]} ({len(cat_symbols)} symbols)"):
+                cat_rows = [
+                    {
+                        "Symbol": s,
+                        "Last Close": r.get("last_close"),
+                        "EMA20": r.get("ema20"),
+                        "EMA50": r.get("ema50"),
+                        "EMA100": r.get("ema100"),
+                        "EMA200": r.get("ema200"),
+                    }
+                    for s, r in sorted(cat_symbols.items())
+                ]
+                st.dataframe(
+                    pd.DataFrame(cat_rows), hide_index=True, use_container_width=True,
+                    height=min(400, 60 + 35 * len(cat_rows)),
+                )
+
+        # "Agree" means both schemes landed on the same tier number (Cat-3
+        # and Cat-3E agree; Mixed and MixedE agree). A disagreement is where
+        # EMA's faster reaction to price has already flipped tier while SMA
+        # hasn't caught up yet (or vice versa).
+        def _tier(cat):
+            return cat[:-1] if cat.endswith("E") else cat
+
+        agree_count = sum(1 for r in categorized.values() if _tier(r["category"]) == _tier(r["ema_category"]))
+        st.caption(f"{agree_count} of {len(categorized)} symbols have matching SMA/EMA tiers.")
+
+        with st.expander(f"{len(categorized) - agree_count} symbols where SMA and EMA tiers disagree"):
+            disagree_rows = [
+                {"Symbol": s, "SMA Category": r["category"], "EMA Category": r["ema_category"]}
+                for s, r in sorted(categorized.items())
+                if _tier(r["category"]) != _tier(r["ema_category"])
+            ]
+            st.dataframe(
+                pd.DataFrame(disagree_rows), hide_index=True, use_container_width=True,
+                height=min(400, 60 + 35 * len(disagree_rows)),
+            )
+
+        st.markdown("---")
+
+        selected_categories = st.multiselect(
+            "Categories to include in the fundamentals scan below:",
+            options=CATEGORY_ORDER,
+            default=CATEGORY_ORDER,
+            format_func=lambda c: f"{c} -- {CATEGORY_LABELS[c]} ({counts[c]})",
+        )
+        category_pool = [s for s, r in categorized.items() if r["category"] in selected_categories]
+        st.caption(
+            f"{len(category_pool)} symbols match the selected categories "
+            f"(out of {len(MODI1_INTRADAY_SYMBOLS)} total)."
+        )
+
+        if uncategorized:
+            with st.expander(f"{len(uncategorized)} symbols couldn't be categorized"):
+                st.dataframe(
+                    pd.DataFrame([{"Symbol": s, "Error": r["error"]} for s, r in uncategorized.items()]),
+                    hide_index=True, use_container_width=True,
+                )
+    else:
+        st.caption("Not categorized yet -- fundamentals scan below will use the full universe.")
+
+    st.subheader("Step 2 -- Scan fundamentals")
 
     scan_count = st.number_input(
         "Symbols to scan (reduce for a quicker test run):",
-        min_value=10, max_value=len(MODI1_INTRADAY_SYMBOLS), value=len(MODI1_INTRADAY_SYMBOLS), step=10,
+        min_value=min(10, len(category_pool)) if category_pool else 0,
+        max_value=max(len(category_pool), 1),
+        value=len(category_pool),
+        step=10,
     )
 
     if st.button("Scan Universe"):
-        symbols_to_scan = MODI1_INTRADAY_SYMBOLS[:scan_count]
+        symbols_to_scan = category_pool[:scan_count]
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -377,6 +622,7 @@ with tab_universe:
         results = st.session_state["universe_results"]
         rows = [_fundamentals_row(r) for r in results]
         df = pd.DataFrame(rows)
+        df["Category"] = df["Symbol"].map(symbol_category_map)
 
         ok_df = df[df["Error"].isna()].drop(columns=["Error"])
         failed_df = df[df["Error"].notna()]
@@ -392,10 +638,28 @@ with tab_universe:
             )
             display_df = display_df[mask]
 
-        st.dataframe(
-            display_df.sort_values("Market Cap (Cr)", ascending=False, na_position="last"),
-            hide_index=True, use_container_width=True, height=600,
-        )
+        if symbol_category_map:
+            # Grouped by trend category (Step 1's buckets) instead of one flat
+            # table -- each category gets its own heading and sub-table.
+            for cat in CATEGORY_ORDER + [None]:
+                cat_df = display_df[display_df["Category"] == cat] if cat is not None else display_df[display_df["Category"].isna()]
+                if cat_df.empty:
+                    continue
+                heading = f"{cat} -- {CATEGORY_LABELS[cat]}" if cat is not None else "Uncategorized"
+                st.markdown(f"**{heading}** ({len(cat_df)} symbols)")
+                st.dataframe(
+                    cat_df.drop(columns=["Category"]).sort_values(
+                        "Market Cap (Cr)", ascending=False, na_position="last"
+                    ),
+                    hide_index=True, use_container_width=True, height=min(400, 60 + 35 * len(cat_df)),
+                )
+        else:
+            st.dataframe(
+                display_df.drop(columns=["Category"]).sort_values(
+                    "Market Cap (Cr)", ascending=False, na_position="last"
+                ),
+                hide_index=True, use_container_width=True, height=600,
+            )
 
         if not failed_df.empty:
             with st.expander(f"{len(failed_df)} symbols with no data"):

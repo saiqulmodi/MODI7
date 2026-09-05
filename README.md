@@ -89,3 +89,30 @@ NSE/SEBI/RSS items and sends any not-yet-alerted match to Telegram (tracked
 via the `alerted_at` column in `modi7_events.db`, so nothing is ever sent
 twice). Register it as a Windows Task Scheduler job to run every 15 minutes
 for hands-off alerting.
+
+## Universe scan on a schedule
+
+The "MODI1 Intraday Universe" tab's full scan (~530 symbols, 5+ Yahoo calls
+each) takes 15-20+ minutes if run live, so `universe_scan_scheduled.py` keeps
+a combined trend-category + fundamentals snapshot (`universe_scan_snapshot.json`,
+gitignored) refreshed in the background, and the dashboard loads that
+snapshot instantly instead of making the visitor wait through a live scan.
+
+Two Task Scheduler jobs keep it current, registered via `schtasks /create`
+(same pattern as `MODI7_TelegramAlert`):
+
+- **`MODI7_TrendScan`** -- runs `run_universe_trend_scan.bat` every 30
+  minutes. Fast (~1-2 min), 1 Yahoo call/symbol -- refreshes each symbol's
+  Cat-1..Cat-7/Mixed trend category (price vs its 20/50/100/200-day SMA)
+  since price moves throughout the trading day.
+- **`MODI7_FundamentalsScan_PreOpen` / `_Midday` / `_Close`** -- run
+  `run_universe_fundamentals_scan.bat` at 09:00, 12:30, and 15:45 daily.
+  Slow (15-20+ min), 5+ Yahoo calls/symbol -- refreshes P/E, ROE, growth,
+  etc. Only a few times a day since fundamentals don't move intraday, so
+  running this as often as the trend scan would just add unnecessary Yahoo
+  request volume for no new information.
+
+Both write into the same snapshot file without clobbering each other's data,
+so a trend-only run never wipes out the last fundamentals refresh and vice
+versa. Re-run `schtasks /create ... /f` with updated `/st`/`/mo` values to
+change the cadence, or `schtasks /delete /tn "<name>" /f` to remove a job.

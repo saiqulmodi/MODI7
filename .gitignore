@@ -5,3 +5,5 @@ __pycache__/
 *.log
 modi7_events.db
 universe_scan_full.csv
+universe_scan_snapshot.json
+universe_scan_snapshot.json.tmp
