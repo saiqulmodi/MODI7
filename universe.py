@@ -1,16 +1,25 @@
 """
-MODI1's curated intraday trading universe (678 NSE symbols as of 2026-09-05),
+MODI1's curated intraday trading universe (640 NSE symbols as of 2026-09-05),
 copied from MODI1/intraday_watchlist.py's INTRADAY_SYMBOLS. Kept as a static
 snapshot here rather than importing across projects -- MODI7 shouldn't break
 if MODI1's file moves or its list changes shape. Re-sync manually if MODI1's
-list changes and you want MODI7's universe scan to reflect it.
+list changes and you want MODI7's universe scan to reflect it. NOTE: this
+list is now smaller than MODI1's actual INTRADAY_SYMBOLS (see below) -- not
+a re-sync gap, a deliberate MODI7-only trim.
 
 RANEBRAKE, ITDCEM, and KRT removed 2026-09-05 -- MODI7's own trend-category
 scan (RANEBRAKE, ITDCEM) and a direct Yahoo check (KRT) confirmed zero price
 data for all three. KRT's only NSE listing is "KRT-RR", a temporary Rights
 Renunciation instrument from a rights issue, not the regular equity. 146
 other symbols added the same day from a user-provided batch (see the comment
-above that block for which pasted symbols were corrected or dropped).
+above that block for which pasted symbols were corrected or dropped), then
+38 of those 146 were removed again the same day -- each failed MODI7's trend
+categorization for lack of 200 days of Yahoo price history (37, all very
+recent IPOs -- will re-qualify naturally as trading days accumulate) or, for
+OBSCP, because Yahoo doesn't cover NSE SME-board tickers at all. These 38
+are NOT removed from MODI1's INTRADAY_SYMBOLS -- they trade fine there via
+Motilal/Angel and only fail MODI7's Yahoo-specific 200-day SMA requirement.
+Re-add to this file once MODI7's own scan re-categorizes them successfully.
 """
 
 MODI1_INTRADAY_SYMBOLS = [
@@ -23,7 +32,7 @@ MODI1_INTRADAY_SYMBOLS = [
     "ACE", "JIOFIN", "GRSE", "NORTHARC", "RATEGAIN", "PIDILITIND",
     "AVALON", "SHRIRAMFIN", "UPL", "ICICIGI", "RELIANCE", "SUNFLAG",
     "HINDCOPPER", "NYKAA", "SBIN", "SBILIFE", "ICICIBANK", "SANDUMA",
-    "MEESHO", "UNITDSPR", "SAGILITY", "HINDZINC", "CUMMINSIND", "RHIM",
+    "UNITDSPR", "SAGILITY", "HINDZINC", "CUMMINSIND", "RHIM",
     "SAATVIKGL", "DIVISLAB", "ZYDUSLIFE", "PPLPHARMA", "COHANCE", "ANTHEM",
     "MARKSANS", "NEULANDLAB", "NETWEB", "ANANTRAJ", "TECHNOE", "SUPREMEIND",
     "APOLLOPIPE", "POLYCAB", "CARYSIL", "DELHIVERY", "APOLLO", "KALYANKJIL",
@@ -40,7 +49,7 @@ MODI1_INTRADAY_SYMBOLS = [
     "VENTIVE", "CENTURYPLY", "KANSAINER", "SUDARSCHEM", "TRIVENI", "GNFC",
     "SRF", "MSTCLTD", "UJJIVANSFB", "GMMPFAUDLR", "BAJAJELEC", "JSFB",
     "MFSL", "RUBICON", "TI", "GPPL", "AZAD", "HAPPSTMNDS",
-    "VOLTAMP", "BALAMINES", "VAML", "KIRLOSENG", "AMBUJACEM", "SHILPAMED",
+    "VOLTAMP", "BALAMINES", "KIRLOSENG", "AMBUJACEM", "SHILPAMED",
     "INDIGOPNTS", "KIRLPNU", "NEOGEN", "MANORAMA", "GODREJAGRO", "ASTERDM",
     "BLUESTARCO", "CASTROLIND", "CDSL", "ANGELONE", "RADICO", "CAMS",
     "CHAMBLFERT", "CROMPTON", "KARURVYSYA", "CHALET", "MANAPPURAM", "LEMONTREE",
@@ -56,11 +65,11 @@ MODI1_INTRADAY_SYMBOLS = [
     "KPIL", "SHAKTIPUMP", "RVNL", "IRFC", "PFC", "USHAMART",
     "NMDC", "HONASA", "TARIL", "VSSL", "GODREJIND", "SAILIFE",
     "CEATLTD", "SCHNEIDER", "AADHARHFC", "JKCEMENT", "360ONE", "ACMESOLAR",
-    "TEGA", "ELGIEQUIP", "PCBL", "LCL", "BEML", "ASAHIINDIA",
+    "TEGA", "ELGIEQUIP", "PCBL", "BEML", "ASAHIINDIA",
     "SCI", "JARO", "PWL", "VERANDA", "WELSPUNLIV", "KPRMILL",
     "PERSISTENT", "COFORGE", "INDIGO", "ABCAPITAL", "TVSMOTOR", "BAJAJ-AUTO",
     "TATACOMM", "WINDLAS", "AMRUTANJAN", "PFIZER", "ASIANPAINT", "INGERRAND",
-    "WALCHANNAG", "AMAGI", "TITAGARH", "MANIPALHOS", "TATACAP", "NAM-INDIA",
+    "WALCHANNAG", "TITAGARH", "TATACAP", "NAM-INDIA",
     "EMMVEE", "FINEORG", "GABRIEL", "GRWRHITECH", "ITCHOTELS", "JBMA",
     "MINDACORP", "PRIVISCL", "DMART", "SHYAMMETL", "FMGOETZE", "URBANCO",
     "SUMICHEM", "ZYDUSWELL", "TRAVELFOOD", "SHANTIGEAR", "ADANIENT", "APOLLOHOSP",
@@ -87,13 +96,13 @@ MODI1_INTRADAY_SYMBOLS = [
     "PRINCEPIPE", "RITES", "STARCEMENT", "TEXRAIL", "CEIGALL", "AHLWEST",
     "PITTIENG", "VEDL", "JKPAPER", "AUBANK", "MAHSEAMLES", "AVANTIFEED",
     "BASF", "RAIN", "MOLDTKPAC", "CAPACITE", "JSWINFRA", "TATATECH",
-    "AIAENG", "BELRISE", "ATHERENERG", "NEPHROPLUS", "MANINFRA", "CIEINDIA",
+    "AIAENG", "BELRISE", "ATHERENERG", "MANINFRA", "CIEINDIA",
     "DOMS", "ENRIN", "ENTERO", "EPACK", "GVT&D", "HARSHA",
     "HEG", "HIRECT", "IFBIND", "INTELLECT", "KIRLOSBROS", "KRISHANA",
     "LALPATHLAB", "MAHLIFE", "MIDHANI", "POWERMECH", "RAYMONDLSL", "RAYMONDREL",
     "SAFARI", "SIS", "SOUTHBANK", "SPAL", "SKFINDIA", "SJS",
     "SHANKARA", "SUPRIYA", "AKUMS", "RAMRAT", "DPABHUSHAN", "NELCAST",
-    "PREMIERENE", "VSTTILLERS", "TIMEX", "TENNIND", "CANFINHOME", "J&KBANK",
+    "PREMIERENE", "VSTTILLERS", "TENNIND", "CANFINHOME", "J&KBANK",
     "BANKBARODA", "HDFCAMC", "CARRARO", "PSPPROJECT", "TALBROAUTO", "JKTYRE",
     "GNA", "PRICOLLTD", "ESCORTS", "SIRCA", "GOODLUCK", "STYLAMIND",
     "EPACKPEB", "MASTEK", "CYIENT", "FINCABLES", "SGMART", "MPSLTD",
@@ -101,7 +110,7 @@ MODI1_INTRADAY_SYMBOLS = [
     "SAPPHIRE", "GREENPLY", "SAKAR", "GESHIP", "CESC", "PNBGILTS",
     "BHARATRAS", "VENUSPIPES", "EMSLIMITED", "GLAXO", "KKCL", "HDBFS",
     "BAJAJHFL", "BAJAJCON", "GRANULES", "HESTERBIO", "OFSS", "MPHASIS",
-    "PARKHOSPS", "SHARDAMOTR", "ERIS", "POLICYBZR", "INDIASHLTR", "SHAILY",
+    "SHARDAMOTR", "ERIS", "POLICYBZR", "INDIASHLTR", "SHAILY",
     "BECTORFOOD", "REDTAPE", "TCPLPACK", "SURYAROSNI", "TBZ", "KSOLVES",
 
     # Added 2026-09-05 at user's request (batch add, ~180 pasted symbols).
@@ -120,26 +129,24 @@ MODI1_INTRADAY_SYMBOLS = [
     "PANAMAPET", "JSWCEMENT", "SKYGOLD", "SAIL", "GATEWAY", "IMFA",
     "RELAXO", "SAMBHV", "HARIOMPIPE", "TEXMOPIPES", "KIOCL", "KSB",
     "SFL", "NAHARSPING", "ROLEXRINGS", "MANYAVAR", "KRISHNADEF", "BANCOINDIA",
-    "ZFSTEERING", "RPSGVENT", "RCF", "OBSCP", "UNICHEMLAB", "BOROSCI",
+    "RPSGVENT", "RCF", "UNICHEMLAB", "BOROSCI",
     "GANECOS", "WSTCSTPAPR", "ROSSTECH", "ACCELYA", "BRITANNIA", "ETHOSLTD",
     "HGINFRA", "LTFOODS", "GRAPHITE", "VMARCIND", "GALAXYSURF", "FOSECOIND",
-    "SURAKSHA", "TVSSRICHAK", "IREDA", "AKCAPIT", "UNIONBANK", "JMFINANCIL",
+    "SURAKSHA", "TVSSRICHAK", "IREDA", "UNIONBANK", "JMFINANCIL",
     "DSSL", "KITEX", "APTUS", "ACUTAAS", "AEGISVOPAK", "BLUESTONE",
     "THEMISMED", "RPEL", "SHARDACROP", "JUBLINGREA", "CPPLUS", "WHEELS",
-    "DMCC", "FCL", "PRECOT", "CLEANMAX", "ECLERX", "BBTC",
+    "DMCC", "FCL", "PRECOT", "ECLERX", "BBTC",
     "SOTL", "PATELENG", "THANGAMAYL", "HINDWAREAP", "SANGHVIMOV", "LAOPALA",
-    "NGLFINE", "VISHNU", "ABLBL", "CSBBANK", "OMNI", "INDOBORAX",
+    "NGLFINE", "VISHNU", "ABLBL", "CSBBANK", "INDOBORAX",
     "YASHO", "ALLDIGI", "GREAVESCOT", "NRBBEARING", "INDGN", "GODREJCP",
     "TANLA", "LGBBROSLTD", "EMIL", "EDELWEISS", "TRITURBINE", "LINCOLN",
-    "BLISSGVS", "BLUEJET", "CREDITACC", "MACPOWER", "ASHAPURMIN", "CORONA",
+    "BLISSGVS", "BLUEJET", "CREDITACC", "MACPOWER", "ASHAPURMIN",
     "BSOFT", "JAYNECOIND", "POLYMED", "SONATSOFTW", "LATENTVIEW", "JUBLPHARMA",
-    "INDORAMA", "CINELINE", "CORDELIA", "INDIQUBE", "KPEL",
+    "INDORAMA", "CINELINE", "INDIQUBE", "KPEL",
     "SWIGGY", "NLCINDIA", "MODIS", "KALPATARU", "METROPOLIS", "WEWORK",
-    "ORKLAINDIA", "DHANUKA", "LTM", "INDOMIM", "DATAMATICS", "SJVN",
-    "VASCONEQ", "CMLL", "LASERPOWER", "KUSUMGAR", "KISSHT", "HEXAGON",
-    "RAMBHAJO", "KNACK", "YOGI", "AUGMONT", "TEMPSENS", "BLEL",
-    "SHIPROCKET", "MILKYMIST", "HTEL", "SKYWAYS", "SHANKESH", "DHOOTTRANS",
-    "GAJA", "SUNSHINE", "MOLBIO", "JINDRILL", "KENNAMET", "GODAVARIB",
-    "RISHABH", "TIL", "ALPINETEX",
+    "ORKLAINDIA", "DHANUKA", "LTM", "DATAMATICS", "SJVN",
+    "VASCONEQ",
+    "JINDRILL", "GODAVARIB",
+    "RISHABH", "TIL",
 ]
 
