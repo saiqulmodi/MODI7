@@ -1,9 +1,14 @@
 """
-MODI1's curated intraday trading universe (534 NSE symbols as of 2026-08-29),
+MODI1's curated intraday trading universe (532 NSE symbols as of 2026-09-05),
 copied from MODI1/intraday_watchlist.py's INTRADAY_SYMBOLS. Kept as a static
 snapshot here rather than importing across projects -- MODI7 shouldn't break
 if MODI1's file moves or its list changes shape. Re-sync manually if MODI1's
 list changes and you want MODI7's universe scan to reflect it.
+
+RANEBRAKE and ITDCEM removed 2026-09-05 -- MODI7's own trend-category scan
+confirmed Yahoo Finance has zero price data for either ticker (also missing
+from Motilal's nse_scrips.csv and Angel's scrip master per MODI1's notes),
+so both are almost certainly delisted/renamed rather than a temporary gap.
 """
 
 MODI1_INTRADAY_SYMBOLS = [
@@ -69,13 +74,13 @@ MODI1_INTRADAY_SYMBOLS = [
     "PAGEIND", "SUTLEJTEX", "SIYSIL", "NITINSPIN", "HIMATSEIDE", "MHRIL",
     "SAMHI", "JUNIPER", "EASEMYTRIP", "THOMASCOOK", "WONDERLA", "BHARATFORG",
     "BOSCHLTD", "EXIDEIND", "HEROMOTOCO", "TIINDIA", "APOLLOTYRE", "AUTOAXLES",
-    "FIEMIND", "JAMNAAUTO", "LUMAXIND", "MRF", "RAJRATAN", "RANEBRAKE",
+    "FIEMIND", "JAMNAAUTO", "LUMAXIND", "MRF", "RAJRATAN",
     "RANEHOLDIN", "RICOAUTO", "SSWL", "SUBROS", "SUNDRMFAST", "VARROC",
     "RAILTEL", "KAYNES", "ABREL", "BPCL", "CGPOWER", "DLF",
     "GAIL", "HINDPETRO", "INDUSTOWER", "IOC", "PHOENIXLTD", "SHREECEM",
     "SUZLON", "ACC", "JSWDULUX", "ASHOKA", "BERGEPAINT", "BIRLACORPN",
     "CERA", "DALBHARAT", "DBL", "FINPIPE", "GRINFRA", "INDIACEM",
-    "IRB", "IRCON", "ITDCEM", "JKIL", "JKLAKSHMI", "KEC",
+    "IRB", "IRCON", "JKIL", "JKLAKSHMI", "KEC",
     "KNRCON", "NCC", "NITCO", "NUVOCO", "ORIENTBELL", "PNCINFRA",
     "PRINCEPIPE", "RITES", "STARCEMENT", "TEXRAIL", "CEIGALL", "AHLWEST",
     "PITTIENG", "VEDL", "JKPAPER", "AUBANK", "MAHSEAMLES", "AVANTIFEED",
