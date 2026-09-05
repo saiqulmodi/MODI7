@@ -1,14 +1,16 @@
 """
-MODI1's curated intraday trading universe (532 NSE symbols as of 2026-09-05),
+MODI1's curated intraday trading universe (678 NSE symbols as of 2026-09-05),
 copied from MODI1/intraday_watchlist.py's INTRADAY_SYMBOLS. Kept as a static
 snapshot here rather than importing across projects -- MODI7 shouldn't break
 if MODI1's file moves or its list changes shape. Re-sync manually if MODI1's
 list changes and you want MODI7's universe scan to reflect it.
 
-RANEBRAKE and ITDCEM removed 2026-09-05 -- MODI7's own trend-category scan
-confirmed Yahoo Finance has zero price data for either ticker (also missing
-from Motilal's nse_scrips.csv and Angel's scrip master per MODI1's notes),
-so both are almost certainly delisted/renamed rather than a temporary gap.
+RANEBRAKE, ITDCEM, and KRT removed 2026-09-05 -- MODI7's own trend-category
+scan (RANEBRAKE, ITDCEM) and a direct Yahoo check (KRT) confirmed zero price
+data for all three. KRT's only NSE listing is "KRT-RR", a temporary Rights
+Renunciation instrument from a rights issue, not the regular equity. 146
+other symbols added the same day from a user-provided batch (see the comment
+above that block for which pasted symbols were corrected or dropped).
 """
 
 MODI1_INTRADAY_SYMBOLS = [
@@ -101,5 +103,43 @@ MODI1_INTRADAY_SYMBOLS = [
     "BAJAJHFL", "BAJAJCON", "GRANULES", "HESTERBIO", "OFSS", "MPHASIS",
     "PARKHOSPS", "SHARDAMOTR", "ERIS", "POLICYBZR", "INDIASHLTR", "SHAILY",
     "BECTORFOOD", "REDTAPE", "TCPLPACK", "SURYAROSNI", "TBZ", "KSOLVES",
+
+    # Added 2026-09-05 at user's request (batch add, ~180 pasted symbols).
+    # Every symbol below was verified against live Yahoo Finance price
+    # history before being added. A few misspellings from the original
+    # paste were corrected to their real ticker (JINDALRILL->JINDRILL,
+    # KENNAMETN->KENNAMET, INDIAIANB->INDIANB, GODAVERIB->GODAVARIB,
+    # RISHABHA->RISHABH, TILL->TIL, CMLLALPINETEX->ALPINETEX). 9 symbols
+    # from the paste (ASMTEC, SGGHFL, MOBAVENUE, LGINDIA, AFCOM, NIYOGIN,
+    # LAXMIIINDIA, DYNAVSN, LALTHAA) matched no ticker on Yahoo even after
+    # correction attempts and were left out rather than guessed. KRT was
+    # initially added then removed (see module docstring above) once a
+    # direct Yahoo check showed it has zero price data. See MODI1's
+    # intraday_watchlist.py for the same batch (source of truth).
+    "COLPAL", "CUB", "GODFRYPHLP", "TEAMLEASE", "PTCIL", "STEELCAS",
+    "PANAMAPET", "JSWCEMENT", "SKYGOLD", "SAIL", "GATEWAY", "IMFA",
+    "RELAXO", "SAMBHV", "HARIOMPIPE", "TEXMOPIPES", "KIOCL", "KSB",
+    "SFL", "NAHARSPING", "ROLEXRINGS", "MANYAVAR", "KRISHNADEF", "BANCOINDIA",
+    "ZFSTEERING", "RPSGVENT", "RCF", "OBSCP", "UNICHEMLAB", "BOROSCI",
+    "GANECOS", "WSTCSTPAPR", "ROSSTECH", "ACCELYA", "BRITANNIA", "ETHOSLTD",
+    "HGINFRA", "LTFOODS", "GRAPHITE", "VMARCIND", "GALAXYSURF", "FOSECOIND",
+    "SURAKSHA", "TVSSRICHAK", "IREDA", "AKCAPIT", "UNIONBANK", "JMFINANCIL",
+    "DSSL", "KITEX", "APTUS", "ACUTAAS", "AEGISVOPAK", "BLUESTONE",
+    "THEMISMED", "RPEL", "SHARDACROP", "JUBLINGREA", "CPPLUS", "WHEELS",
+    "DMCC", "FCL", "PRECOT", "CLEANMAX", "ECLERX", "BBTC",
+    "SOTL", "PATELENG", "THANGAMAYL", "HINDWAREAP", "SANGHVIMOV", "LAOPALA",
+    "NGLFINE", "VISHNU", "ABLBL", "CSBBANK", "OMNI", "INDOBORAX",
+    "YASHO", "ALLDIGI", "GREAVESCOT", "NRBBEARING", "INDGN", "GODREJCP",
+    "TANLA", "LGBBROSLTD", "EMIL", "EDELWEISS", "TRITURBINE", "LINCOLN",
+    "BLISSGVS", "BLUEJET", "CREDITACC", "MACPOWER", "ASHAPURMIN", "CORONA",
+    "BSOFT", "JAYNECOIND", "POLYMED", "SONATSOFTW", "LATENTVIEW", "JUBLPHARMA",
+    "INDORAMA", "CINELINE", "CORDELIA", "INDIQUBE", "KPEL",
+    "SWIGGY", "NLCINDIA", "MODIS", "KALPATARU", "METROPOLIS", "WEWORK",
+    "ORKLAINDIA", "DHANUKA", "LTM", "INDOMIM", "DATAMATICS", "SJVN",
+    "VASCONEQ", "CMLL", "LASERPOWER", "KUSUMGAR", "KISSHT", "HEXAGON",
+    "RAMBHAJO", "KNACK", "YOGI", "AUGMONT", "TEMPSENS", "BLEL",
+    "SHIPROCKET", "MILKYMIST", "HTEL", "SKYWAYS", "SHANKESH", "DHOOTTRANS",
+    "GAJA", "SUNSHINE", "MOLBIO", "JINDRILL", "KENNAMET", "GODAVARIB",
+    "RISHABH", "TIL", "ALPINETEX",
 ]
 
