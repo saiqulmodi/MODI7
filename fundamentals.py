@@ -204,6 +204,10 @@ def get_fundamentals(symbol):
         "market_cap": info.get("marketCap"),
         "pe_trailing": info.get("trailingPE"),
         "pe_forward": info.get("forwardPE"),
+        # trailingPegRatio is frequently None for NSE tickers in this yfinance
+        # version even when data exists -- pegRatio is the more reliably
+        # populated field here, confirmed against RELIANCE/HDFCBANK/AXISBANK.
+        "peg": info.get("trailingPegRatio") or info.get("pegRatio"),
         "pb": info.get("priceToBook"),
         "ev_ebitda": info.get("enterpriseToEbitda"),
         # NOTE: unlike roe/profitMargins (true fractions), this yfinance

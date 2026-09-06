@@ -48,6 +48,7 @@ def _fundamentals_row(r):
         "Sector": r["sector"],
         "Price": r["price"],
         "P/E": r["pe_trailing"],
+        "PEG": r.get("peg"),
         "P/B": r["pb"],
         "ROE %": r["roe_pct"],
         "Net Margin %": r["net_profit_margin_pct"],
@@ -478,6 +479,22 @@ with tab_universe:
         uncategorized = {s: r for s, r in trend_categories.items() if r.get("error")}
         symbol_category_map = {_normalize_symbol(s): r["category"] for s, r in categorized.items()}
 
+        # PEG comes from the fundamentals scan (Step 2 below), not this fast
+        # trend pass, so it's only available once that scan has been run in
+        # this session. When present, rank each category's stocks by PEG
+        # (cheapest relative to growth first); symbols the fundamentals scan
+        # hasn't covered (or without a PEG value) sort alphabetically after.
+        peg_by_symbol = {}
+        if "universe_results" in st.session_state:
+            for r in st.session_state["universe_results"]:
+                if not r.get("error") and r.get("peg") is not None:
+                    peg_by_symbol[r["symbol"]] = r["peg"]
+
+        def _peg_sort_key(item):
+            symbol = item[0]
+            peg = peg_by_symbol.get(_normalize_symbol(symbol))
+            return (peg is None, peg if peg is not None else 0, symbol)
+
         counts = {cat: 0 for cat in CATEGORY_ORDER}
         for r in categorized.values():
             counts[r["category"]] += 1
@@ -497,13 +514,14 @@ with tab_universe:
                 cat_rows = [
                     {
                         "Symbol": s,
+                        "PEG": peg_by_symbol.get(_normalize_symbol(s)),
                         "Last Close": r.get("last_close"),
                         "SMA20": r.get("sma20"),
                         "SMA50": r.get("sma50"),
                         "SMA100": r.get("sma100"),
                         "SMA200": r.get("sma200"),
                     }
-                    for s, r in sorted(cat_symbols.items())
+                    for s, r in sorted(cat_symbols.items(), key=_peg_sort_key)
                 ]
                 st.dataframe(
                     pd.DataFrame(cat_rows), hide_index=True, use_container_width=True,
@@ -536,13 +554,14 @@ with tab_universe:
                 cat_rows = [
                     {
                         "Symbol": s,
+                        "PEG": peg_by_symbol.get(_normalize_symbol(s)),
                         "Last Close": r.get("last_close"),
                         "EMA20": r.get("ema20"),
                         "EMA50": r.get("ema50"),
                         "EMA100": r.get("ema100"),
                         "EMA200": r.get("ema200"),
                     }
-                    for s, r in sorted(cat_symbols.items())
+                    for s, r in sorted(cat_symbols.items(), key=_peg_sort_key)
                 ]
                 st.dataframe(
                     pd.DataFrame(cat_rows), hide_index=True, use_container_width=True,
