@@ -19,7 +19,24 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 
-from send_telegram import send_telegram_message
+sys.stdout.reconfigure(encoding="utf-8")
+
+import requests
+from send_telegram import BOT_TOKEN, CHAT_ID
+
+
+def _send_digest_raw(text):
+    """Sends the digest via a direct API call rather than
+    send_telegram.send_telegram_message(), which auto-logs every message it
+    sends to the same alerts_log.jsonl this script reads from -- using it
+    here would make the digest include itself as one of "today's alerts",
+    growing self-referentially on every re-run."""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        print(f"Telegram send failed: {response.text}")
+    return response.status_code == 200
 
 ALERTS_LOG_PATH = r"C:\Users\saiqu\alerts_digest\alerts_log.jsonl"
 
@@ -47,7 +64,7 @@ def load_todays_alerts(target_date=None):
 def build_digest(alerts, target_date):
     if not alerts:
         return (
-            f"*Daily Alert Digest -- {target_date.strftime('%Y-%m-%d')}*\n\n"
+            f"<b>Daily Alert Digest -- {target_date.strftime('%Y-%m-%d')}</b>\n\n"
             f"No alerts were sent by any MODI project today."
         )
 
@@ -55,7 +72,7 @@ def build_digest(alerts, target_date):
     for entry in alerts:
         by_project[entry["project"]].append(entry)
 
-    lines = [f"*Daily Alert Digest -- {target_date.strftime('%Y-%m-%d')}*"]
+    lines = [f"<b>Daily Alert Digest -- {target_date.strftime('%Y-%m-%d')}</b>"]
     lines.append(f"{len(alerts)} alert(s) across {len(by_project)} project(s) today.\n")
 
     for project in sorted(by_project):
@@ -84,7 +101,7 @@ def main():
     alerts = load_todays_alerts(target_date)
     digest = build_digest(alerts, target_date)
     print(digest)
-    sent = send_telegram_message(digest)
+    sent = _send_digest_raw(digest)
     print(f"\nDigest sent: {sent}")
 
 
